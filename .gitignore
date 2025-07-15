@@ -1,5 +1,4 @@
 /app_multi.py
-/ATK_new.ico
 /bn_syy.spec
 /bot_01
 /bot_01.zip
@@ -15,9 +14,7 @@
 /en_dogeusdt
 /json
 /logs
-/patch.md
 /poetry.lock
-/pyproject.toml
 /temp.py
 /test_bnen.py
 /test_bnen_ws.py

@@ -1,0 +1,29 @@
+[project]
+name = "bn-syy"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "appcorner",email = "appcorner@yahoo.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9,<3.13"
+dependencies = [
+    "requests (>=2.32.3,<3.0.0)",
+    "websocket-client (>=1.8.0,<2.0.0)",
+    "numpy (==1.26.4)",
+    "pytz (>=2025.2,<2026.0)",
+    "colorama (>=0.4.6,<0.5.0)",
+    "python-binance (==1.0.19)",
+    "tabulate (>=0.9.0,<0.10.0)",
+    "pyinstaller (==6.7.0)",
+]
+
+[tool.poetry.scripts]
+build = "poetry run pyinstaller app.py --icon=ATK_new.png --clean --collect-submodules application --onefile --name bn_syy"
+
+[tool.poetry.group.dev.dependencies]
+pyinstaller = "^6.6.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

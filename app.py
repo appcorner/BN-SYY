@@ -13,7 +13,7 @@ botSetup_precision_coin = 8 # จำนวนทศนิยม COIN amount
 
 # system file name
 fileName_config = 'config'
-fileName_log = 'log'
+fileName_log = 'app'
 fileName_orders_verbose = 'orders_verbose'
 fileName_stat = 'stat'
 fileName_temp = 'temp'
