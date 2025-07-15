@@ -1,0 +1,17 @@
+{
+    "KEY": "",
+    "SECRET": "",
+    "TLD": "",
+
+    "TELEGRAM": 0,
+    "TOKEN": "",
+    "CHATID": "",
+
+    "COIN": "BTC",
+    "MARGIN": "USDT",
+    "ALL_IN": 0,
+    "ORDER_SIZE": 5.0,
+    "MAX_ORDER": 50,
+    
+    "STOPNEXTCIRCLE": 0
+}
