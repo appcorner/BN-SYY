@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-bot_title = 'Binance{}-SYY 2.2 (Build 5) mod by appcorner'
+bot_title = 'Binance{}-SYY 2.2 (Build 6) mod by appcorner'
 bot_title_orig = '[from Bitkub-SYY 2.1 (Build 32) by tidLord]'
 
 # system setup
@@ -67,7 +67,7 @@ def number_truncate(number, precision):
         
 # ฟังก์ชั่นเก็บรายละเอียดออเดอร์ ( orders verbose ) ใส่ orders verbose file
 def orders_verbose(order_type, order_number, order_detail):
-    if botSetup_orders_verbose == True:
+    if botSetup_orders_verbose:
         fileName_orders_verbose_txt = f'{path_data}/{fileName_orders_verbose}.txt'
         try:
             with open(fileName_orders_verbose_txt, 'r', encoding='utf-8') as f:
@@ -176,7 +176,7 @@ def last_active_update(datetime_now):
 def telegram_notify(thisOrder, notifyMsg, order_no, side, price, base_amt, profit, ordercount):
     try:
         if config['TELEGRAM'] == 1:
-            if thisOrder == True:
+            if thisOrder:
                 symbol = config['COIN'] + config['MARGIN']
                 if side == 'buy':               
                     msg = '\nออเดอร์ที่ : ' + str(order_no) + '\nซื้อ : ' + symbol + '\nที่ราคา : ' + number_truncate(price, botSetup_precision_coin) + ' ' + '\nจำนวน : ' + number_truncate(base_amt, botSetup_precision_margin) + ' '
@@ -229,7 +229,7 @@ def buy(client, ask, ordersize, cmd): # cmd 1 -> buy first order, 2 -> buy DCA
 def sell(client, bid, qty_size, cmd): # cmd 3 -> sell profit, 4 -> sell dca, 5 -> sell clear
     try:
         qty_size = round(qty_size, lot_precision)
-        logger.debug('sell : ' + '{:.8f}'.format(bid) + ' / ' + str(qty_size) + ' / ' + str(cmd))
+        logger.debug('sell : ' + '{:.8f}'.format(bid) + ' / ' + f'{qty_size:.{lot_precision}f}' + ' / ' + str(cmd))
         symbol = config['COIN'] + config['MARGIN']
         # lot_size = ordersize / bid
         # lot_size = round(lot_size, 0)
@@ -267,24 +267,25 @@ def on_message(connect, message):
         # config
         config = read_config()
         if config == 0:
-            time.sleep(botSetup_system_delay)
-            return
+            # time.sleep(botSetup_system_delay)
+            # return
+            raise SystemExit("Can not read config file")
         
-        # credentials สำหรับ exchange
-        api_key = config['KEY']
-        api_secret = config['SECRET']
-        api_tld = config['TLD'].lower()
-        try:
-            if api_tld == 'th':
-                client = Client(api_key, api_secret, tld=api_tld)
-            else:
-                client = Client(api_key, api_secret)
-        except Exception as error_is:
-            # throw error
-            print('connect exchange : ' + str(error_is))
-            logger.info('connect exchange : ' + str(error_is))
-            time.sleep(botSetup_system_delay)
-            raise error_is
+        # # credentials สำหรับ exchange
+        # api_key = config['KEY']
+        # api_secret = config['SECRET']
+        # api_tld = config['TLD'].lower()
+        # try:
+        #     if api_tld == 'th':
+        #         client = Client(api_key, api_secret, tld=api_tld)
+        #     else:
+        #         client = Client(api_key, api_secret)
+        # except Exception as error_is:
+        #     # throw error
+        #     print('connect exchange : ' + str(error_is))
+        #     logger.info('connect exchange : ' + str(error_is))
+        #     time.sleep(botSetup_system_delay)
+        #     raise error_is
         
         # datetime สำหรับ loop บอท
         datetime_now = datetime_now = datetime.now(timezone('Asia/Bangkok')).replace(tzinfo=None)
@@ -306,10 +307,10 @@ def on_message(connect, message):
             last_active_update(datetime_now)
             ts_last_active_txt = 0
             time.sleep(botSetup_pid_threshold)
-        except:
+        except Exception:
             ts_last_active_txt = 0
 
-        if pid_signature == None:
+        if pid_signature is None:
             pid_signature = datetime_now.timestamp()
             
         try:
@@ -409,7 +410,7 @@ def on_message(connect, message):
                 dbcursor.execute('select sum(total_profit) from sold')
                 db_res = dbcursor.fetchone()
                 db_sold_total_profit = db_res[0] # ผลรวม total profit จาก sold
-                if db_sold_total_profit == None:
+                if db_sold_total_profit is None:
                     db_sold_total_profit = 0
                 if db_ordercount > 1:
                     dbcursor.execute('select rate from orders where id=(select max(?) from orders)',(db_ordercount - 1,))
@@ -444,15 +445,18 @@ def on_message(connect, message):
         try:
             symbol = config['COIN'] + config['MARGIN']
             msg = json.loads(message)
-            if msg['stream'] == symbol.lower()+'@ticker' and msg['data']['e'] == '24hrTicker' and msg['data']['s'] == symbol.upper():
+            if ((msg['stream'] == symbol.lower()+'@ticker' or msg['stream'] == symbol.lower()+'@bookTicker') \
+                and msg['data']['s'] == symbol.upper()):
                 ask = float(msg['data']['a'])
                 ask_size_coin = float(msg['data']['A'])
                 ask_size_margin = ask_size_coin * ask
                 bid = float(msg['data']['b'])
                 bid_size_coin = float(msg['data']['B'])
             else:
+                logger.debug(message)
                 return
-        except Exception as error:
+        except Exception:
+            logger.exception('websocket message parse error')
             return
         
         # circle period
@@ -516,31 +520,46 @@ def on_message(connect, message):
                     return 1
                 
                 if float(order_info['price']) > 0:
-                    coin_amt = float(order_info['executedQty'])
+                    executed_qty = float(order_info['executedQty'])  # จำนวนเหรียญที่ซื้อได้ (ยังไม่หักค่าคอม)
                     if api_tld == 'th':
-                        base_amt = float(order_info['cumulativeQuoteQty'])
+                        base_amt = float(order_info['cumulativeQuoteQty'])  # USDT ที่ใช้ซื้อ
                     else:
                         base_amt = float(order_info['cummulativeQuoteQty'])
                     rate = float(order_info['price'])
-                    fee_amt = coin_amt * 0.0001 * rate
-                    ts_sec = int(order_info['updateTime']) / 1000
+                    
+                    # fee_amt = executed_qty * 0.0001 * rate
+                    fee_amt = base_amt * 0.001  # ✅ ค่าคอม = 0.1% ของ USDT
+                    coin_amt = executed_qty - (executed_qty * 0.001)  # ปรับจำนวนเหรียญที่ซื้อได้หลังหักค่าคอม
+                    coin_amt = float(number_truncate(coin_amt, lot_precision))  # ตัดทศนิยมตาม lot_precision (ไม่ปัดเศษ)
+                    
+                    if 'updateTime' in order_info:
+                        ts_sec = int(order_info['updateTime']) / 1000
+                    else:
+                        ts_sec = int(time.time())
                 else:
                     temp_for_order = temp_read()['detail']
-                    if temp_for_order['fills'] == []:
-                        return 0
+                    if not temp_for_order.get('fills') or len(temp_for_order['fills']) == 0:
+                        logger.debug('order filled but no fills info, skipping...')
+                        temp_write('', 0, '')
+                        return 1
                     # print(temp_for_order)
-                    coin_amt = float(temp_for_order['fills'][0]['qty'])
+                    executed_qty = float(temp_for_order['fills'][0]['qty'])
                     if api_tld == 'th':
                         base_amt = float(order_info['cumulativeQuoteQty'])
                     else:
                         base_amt = float(order_info['cummulativeQuoteQty'])
-                    # rate = coin_amt / base_amt
+
                     rate = float(temp_for_order['fills'][0]['price'])
-                    fee_amt = coin_amt * 0.0001 * rate
-                    # adjust coin_amt with free 0.01% fee
-                    coin_amt = coin_amt - (coin_amt * 0.0001)
-                    ts_sec = int(temp_for_order['transactTime']) / 1000
-                logger.debug(f"base_amt:{base_amt}, coin_amt:{coin_amt}, rate:{rate}, fee_amt:{fee_amt}, ts_sec:{ts_sec}")
+                    fee_amt = base_amt * 0.001
+                    coin_amt = executed_qty - (executed_qty * 0.001)
+                    if 'transactTime' in temp_for_order:
+                        ts_sec = int(temp_for_order['transactTime']) / 1000
+                    elif 'updateTime' in order_info:
+                        ts_sec = int(order_info['updateTime']) / 1000
+                    else:
+                        ts_sec = int(time.time())
+
+                logger.debug(f"base_amt:{base_amt}, coin_amt:{coin_amt:.{lot_precision}f}, rate:{rate}, fee_amt:{fee_amt}, ts_sec:{ts_sec}")
                 if temp['cmd'] == 1:
                     pricerange = ask / config['MAX_ORDER'] # คำนวณ pricerage
                     dbcursor.execute('insert into orders (rate, base_amt, coin_amt, fee_amt, pricerange, ts)values(?, ?, ?, ?, ?, ?)',(rate, base_amt, coin_amt, fee_amt, pricerange, ts_sec))
@@ -699,7 +718,7 @@ def on_message(connect, message):
             distance_lastorder = ((db_lastorder_price - ask) / db_lastorder_price) * 100
             distance_lastorder = Style.BRIGHT + 'DistanceLastOrder' + Style.RESET_ALL + ' : ' + number_truncate(distance_lastorder * -1, 4) + ' % ( ' + number_truncate((db_lastorder_price - ask) * -1, botSetup_precision_coin) + ' ' + config['MARGIN'] + ' )\n'
         else:
-            distance_lastorder = ''
+            distance_lastorder = Style.BRIGHT + 'DistanceLastOrder' + Style.RESET_ALL + ' : 0.0 % ( 0.0 ' + config['MARGIN'] + ' )\n'
 
         # price range show
         pricerange_show = db_pricerange
@@ -843,7 +862,7 @@ if __name__ == '__main__':
                     telegram_token = config['TOKEN']
                     telegram_chatid = config['CHATID']
                     telegram = TelegramNotify(telegram_token, telegram_chatid)
-                    if telegram.Get_ChatID() == None :
+                    if telegram.Get_ChatID() is None:
                         break
 
                 api_key = config['KEY']
@@ -890,11 +909,11 @@ if __name__ == '__main__':
                         continue
                     if api_tld == 'th':
                         if config['MARGIN'].upper() == 'THB':
-                            socket = 'wss://stream-th.2meta.app/stream?streams={}@ticker'.format(symbol.lower())
+                            socket = 'wss://stream-th.2meta.app/stream?streams={}@bookTicker'.format(symbol.lower())
                         else:
-                            socket = 'wss://www.binance.th/stream?streams={}@ticker'.format(symbol.lower())
+                            socket = 'wss://www.binance.th/stream?streams={}@bookTicker'.format(symbol.lower())
                     else:
-                        socket = 'wss://stream.binance.com:9443/stream?streams={}@ticker'.format(symbol.lower())
+                        socket = 'wss://fstream.binance.com/stream?streams={}@bookTicker'.format(symbol.lower())
                     connect = websocket.WebSocketApp(socket, on_message=on_message, on_close=on_close)
                     connect.run_forever()
                 else:
@@ -919,4 +938,4 @@ if __name__ == '__main__':
         print(SHOW_CURSOR, end="")
         logger.info('===== BN_SYY stop =====')
 
-#poetry run pyinstaller app.py --icon=ATK_new.ico --clean --collect-submodules application --onefile --name bn_syy
+#poetry run pyinstaller app.py --add-data "D:/pypoetry/Cache/virtualenvs/bn-syy-Efwh64a3-py3.12/Lib/site-packages/dateparser/data/dateparser_tz_cache.pkl;dateparser/data" --icon=ATK_new.ico --clean --collect-submodules application --onefile --name bn_syy
