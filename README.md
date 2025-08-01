@@ -28,7 +28,7 @@
 ในไฟล์ config จะมี parameter ต่างๆดังนี้
 -  **KEY** คือ API Key ที่ได้จาก Binance
 -  **SECRET** คือ Secret Key ที่ได้จาก Binance
--  **TLD** คือ กำหนดค่าเป็น "th" เพื่อใช้ Binance ประเทศไทย (ต้องปรับแก้ client.py ใน python-binance เพิ่มเติมจึงจะใช้กับประเทศไทยได้)
+-  **TLD** คือ กำหนดค่าเป็น "th" เพื่อใช้ Binance ประเทศไทย (ต้องปรับแก้ code ใน python-binance ด้วย patch  เพิ่มเติมจึงจะใช้กับ binanace ประเทศไทย ได้)
 -  **TELEGRAM** เปิดหรือปิดใช้งานการแจ้งเตือนโดย Telegram (1=เปิด, 0=ปิด)
 -  **TOKEN** คือ TOKEN ของ Telegram
 -  **CHATID** คือ CHATID ของ Telegram
@@ -42,4 +42,5 @@
 อ่านข้อมูลเพิ่มเติมที่ต้นฉบับ => https://github.com/tidLord/
 
 ## หมายเหตุ
-- ผู้พัฒนาใช้ Python เวอร์ชั่น 3.12.1 พัฒนาบน Windows 11 นะครับ
+- ผู้พัฒนาใช้ Python เวอร์ชั่น 3.12.10 พัฒนาบน Windows 11 นะครับ
+- ใช้ package python-binance 1.0.29
