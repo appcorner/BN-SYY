@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-bot_title = 'Binance{}-SYY 2.2 (Build 6) mod by appcorner'
+bot_title = 'Binance{}-SYY 2.2 (Build 7) mod by appcorner'
 bot_title_orig = '[from Bitkub-SYY 2.1 (Build 32) by tidLord]'
 
 # system setup
@@ -131,7 +131,8 @@ def stat_read():
 
 # ฟังก์ชั่นเขียน hash ใส่ temp file (cmd 1 -> buy first, 2 -> buy DCA, 3 -> sell profit, 4 -> sell DCA, 5 -> sell clear)
 def temp_write(hash, cmd, detail):
-    logger.debug(detail)
+    if detail:
+        logger.debug(detail)
     fileName_temp_json = f'{path_data}/{fileName_temp}.json'
     try:
         with open(fileName_temp_json, 'r', encoding='utf-8') as hash_json:
@@ -173,7 +174,7 @@ def last_active_update(datetime_now):
         last_active.write(str(datetime_now))
         
 # ฟังก์ชั่นการแจ้งเตือนใน telegram ผ่าน telegram api
-def telegram_notify(thisOrder, notifyMsg, order_no, side, price, base_amt, profit, ordercount):
+def telegram_notify_classic(thisOrder, notifyMsg, order_no, side, price, base_amt, profit, ordercount):
     try:
         if config['TELEGRAM'] == 1:
             if thisOrder:
@@ -192,6 +193,60 @@ def telegram_notify(thisOrder, notifyMsg, order_no, side, price, base_amt, profi
                         msg = '\nขาย : ' + symbol + '\nออเดอร์ที่ : ' + str(order_no) + '\nที่ราคา : ' + number_truncate(price, botSetup_precision_coin) + ' '
                 elif side == 'sell_clear': 
                     msg = '\nเคลียร์ออเดอร์ : ' + symbol + '\nจำนวนออเดอร์ : ' + str(ordercount) + '\nที่ราคา : ' + number_truncate(price, botSetup_precision_coin) + ' ' + '\nกำไรจากการเคลียร์ : ' + number_truncate(profit, botSetup_precision_margin)+' '
+            else:
+                msg = notifyMsg
+            telegram.send(msg)
+    except Exception as error_is:
+        logger.debug('telegram function error : '+str(error_is))
+        print('!!! telegram function error !!!')
+
+# ฟังก์ชั่นการแจ้งเตือนใน telegram ผ่าน telegram api
+def telegram_notify(thisOrder, notifyMsg, order_no, side, price, base_amt, profit, ordercount):
+    try:
+        if config['TELEGRAM'] == 1:
+            if thisOrder:
+                symbol = config['COIN'] + config['MARGIN']
+                if side == 'buy':
+                    msg = (
+                        '🟢 *คำสั่งซื้อใหม่!*' +
+                        '\n📦 ออเดอร์ที่ : ' + str(order_no) +
+                        '\n💰 ซื้อ : ' + symbol +
+                        '\n💵 ที่ราคา : ' + number_truncate(price, botSetup_precision_coin) + ' ' + config['MARGIN'] +
+                        '\n📊 จำนวน : ' + number_truncate(base_amt, botSetup_precision_margin) + ' ' + config['MARGIN']
+                    )
+                elif side == 'sell_profit':
+                    if profit >= 0:
+                        msg = (
+                            '🟢 *ขายทำกำไร!*' +
+                            '\n📦 ออเดอร์ที่ : ' + str(order_no) +
+                            '\n💰 ขาย : ' + symbol +
+                            '\n💵 ที่ราคา : ' + number_truncate(price, botSetup_precision_coin) + ' ' + config['MARGIN'] +
+                            '\n✅ กำไร : ' + number_truncate(profit, botSetup_precision_margin) + ' ' + config['MARGIN']
+                        )
+                    else:
+                        msg = (
+                            '🔴 *ขายขาดทุน!*' +
+                            '\n📦 ออเดอร์ที่ : ' + str(order_no) +
+                            '\n💰 ขาย : ' + symbol +
+                            '\n💵 ที่ราคา : ' + number_truncate(price, botSetup_precision_coin) + ' ' + config['MARGIN'] +
+                            '\n📉 ขาดทุน : ' + number_truncate(profit, botSetup_precision_margin) + ' ' + config['MARGIN']
+                        )
+                elif side == 'sell_dca':
+                    msg = (
+                        '🔵 *ขาย DCA!*' +
+                        '\n📦 ออเดอร์ที่ : ' + str(order_no) +
+                        '\n💰 ขาย : ' + symbol +
+                        '\n💵 ที่ราคา : ' + number_truncate(price, botSetup_precision_coin) + ' ' + config['MARGIN'] +
+                        '\n✅ กำไร : ' + number_truncate(profit, botSetup_precision_margin) + ' ' + config['MARGIN']
+                    )
+                elif side == 'sell_clear':
+                    msg = (
+                        '⚪ *เคลียร์ออเดอร์!*' +
+                        '\n💰 เหรียญ : ' + symbol +
+                        '\n📦 จำนวนออเดอร์ : ' + str(ordercount) +
+                        '\n💵 ที่ราคา : ' + number_truncate(price, botSetup_precision_coin) + ' ' + config['MARGIN'] +
+                        '\n✅ กำไรจากการเคลียร์ : ' + number_truncate(profit, botSetup_precision_margin) + ' ' + config['MARGIN']
+                    )
             else:
                 msg = notifyMsg
             telegram.send(msg)
@@ -507,7 +562,23 @@ def on_message(connect, message):
                 symbol = config['COIN'].upper() + config['MARGIN'].upper()
                 clientOrderId = temp['HASH']
 
-                order_info = client.get_order(symbol=symbol, origClientOrderId=clientOrderId)
+                try:
+                    order_info = client.get_order(symbol=symbol, origClientOrderId=clientOrderId)
+                except Exception as e:
+                    logger.exception('order_operate() : ' + str(e))
+                    if 'code=-2013' in str(e):
+                        # order not found, clear temp
+                        temp_write('', 0, '')
+                        print('Order ' + clientOrderId + ' not found, clearing temp...')
+                        return 1
+                    elif 'code=-2011' in str(e):
+                        # unknown order, clear temp
+                        temp_write('', 0, '')
+                        print('Order ' + clientOrderId + ' unknown, clearing temp...')
+                        return 1
+                    else:
+                        time.sleep(botSetup_system_delay)
+                        return 0
                 
                 print('Order ' + temp['HASH'] + ' Filling')
                 while order_info['status'].lower() not in ['filled', 'cancelled']:
