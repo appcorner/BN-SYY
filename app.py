@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
-bot_title = 'Binance{}-SYY 2.2 (Build 7) mod by appcorner'
+bot_title = 'Binance{}-SYY 2.2 (Build 8) mod by appcorner'
 bot_title_orig = '[from Bitkub-SYY 2.1 (Build 32) by tidLord]'
 
 # system setup
-botSetup_system_delay = 3
+botSetup_system_delay = 5
 botSetup_ts_threshold = 60 # ค่าระยะห่าง(หน่วยเป็นวินาที) ไว้เช็คเมื่อบอทหยุดทำงาน
 botSetup_pid_threshold = 3 # ค่าระยะเวลาตรวจจับ last_active ป้องกันบอทรันซ้อนกัน
 botSetup_orders_verbose = True # เก็บรายละเอียดออเดอร์เข้า orders_verbose.txt
@@ -40,6 +40,8 @@ import pathlib
 import logging
 from logging.handlers import RotatingFileHandler
 from TelegramNotify import TelegramNotify
+# throttle: แจ้งเตือน DCA เงินไม่พอได้ไม่เกิน 1 ครั้ง/ชั่วโมง
+last_dca_insufficient_notify_ts = 0
 
 # สำหรับ Windows OS
 if os.name == 'nt':
@@ -249,9 +251,9 @@ def telegram_notify(thisOrder, notifyMsg, order_no, side, price, base_amt, profi
                     )
             else:
                 msg = notifyMsg
-            telegram.send(msg)
+            telegram.send(msg, parse_mode='Markdown')
     except Exception as error_is:
-        logger.debug('telegram function error : '+str(error_is))
+        logger.debug('telegram function error : ' + str(error_is))
         print('!!! telegram function error !!!')
 
 # ฟังก์ชั่นเทรด
@@ -403,7 +405,7 @@ def on_message(connect, message):
                     str_last_active_txt = datetime.fromtimestamp(ts_last_active_txt).strftime('%d/%m/%y %H:%M:%S')
                     str_time_now = datetime.fromtimestamp(ts_now).strftime('%d/%m/%y %H:%M:%S')
                     # ส่งแจ้งเตือน               
-                    msg = '\nบอทหยุดทำงาน\nเมื่อ : ' + str_last_active_txt + '\nกลับมาทำงานเมื่อ : ' + str_time_now
+                    msg = '🔴 *บอทหยุดทำงาน*\nเมื่อ : ' + str_last_active_txt + '\n🟢 *กลับมาทำงาน*\nเมื่อ : ' + str_time_now
                     telegram_notify(False, msg, None, None, None, None, None, None)
         except Exception as error_is:
             print('check_bot_stop : '+str(error_is))
@@ -623,6 +625,8 @@ def on_message(connect, message):
                     rate = float(temp_for_order['fills'][0]['price'])
                     fee_amt = base_amt * 0.001
                     coin_amt = executed_qty - (executed_qty * 0.001)
+
+                    #  ถ้า transactTime ไม่มี ให้ fallback ไปใช้ updateTime
                     if 'transactTime' in temp_for_order:
                         ts_sec = int(temp_for_order['transactTime']) / 1000
                     elif 'updateTime' in order_info:
@@ -682,7 +686,7 @@ def on_message(connect, message):
                     db_ordercount = fetch_db_ordercount()
                     print(f'> OrderCount ({db_ordercount}/{config["MAX_ORDER"]})')
                     orders_verbose('sell dca', db_ordercount + 1, order_info)
-                    telegram_notify(True, None, db_ordercount + 1, 'sell_dca', rate, 0, 0, 0)
+                    telegram_notify(True, None, db_ordercount + 1, 'sell_dca', rate, 0, order_profit, 0)
                 elif temp['cmd'] == 5:
                     # temp_for_order = temp_read()['detail']['result']
                     order_profit = (base_amt + db_sold_total_profit) - db_total_base
@@ -732,17 +736,56 @@ def on_message(connect, message):
             else:
                 show_skip_text()
                 return
-        else: # ถ้ามีออเดอร์ในหน้าตัก
+        else: # ถ้ามีออเดอร์ในหน้าตัก  ซื้อ DCA
             if ask < db_lastorder_price - db_pricerange: # buy dca
                 if db_ordercount < config['MAX_ORDER']:
-                    if ask_size_margin > db_firstorder_cost:
-                        if buy(client, ask, db_firstorder_cost, 2) == 1:
+
+                    # 1) อ่านยอดเงินคงเหลือของ quote asset (เช่น USDT)
+                    try:
+                        balance = client.get_asset_balance(asset=config['MARGIN'].upper())
+                        balance_free = float(balance['free']) if balance else 0.0
+                    except Exception as e:
+                        logger.info('get_asset_balance error: ' + str(e))
+                        # ถ้าอ่าน balance ไม่ได้ ให้ข้ามรอบนี้ไปก่อน
+                        time.sleep(botSetup_system_delay)
+                        return
+
+                    # 2) จำนวนเงินที่ต้องใช้ซื้อ DCA เท่ากับค่า cost ของออเดอร์แรก
+                    required_usdt = float(db_firstorder_cost)
+                    # 3) กันค่าคอม/ส่วนเผื่อเล็กน้อย (เช่น 0.1%) เพื่อไม่ให้ติดลบตอนส่งจริง
+                    required_usdt_with_fee = required_usdt * 1.001
+                    # 4) ต้องไม่ต่ำกว่า minNotional ด้วย (กัน error จาก Exchange)
+                    if required_usdt_with_fee < minNotional:
+                        # เล็กเกินไป ข้ามไปก่อน
+                        show_skip_text()
+                        return
+
+                    # 5) เช็คให้พอจริงก่อนส่งคำสั่ง
+                    if balance_free >= required_usdt_with_fee:
+                        # (ออปชัน) เดิมมีการเช็คสภาพคล่องด้วย ask_size_margin > db_firstorder_cost
+                        # สำหรับ limit order ไม่จำเป็นต้องใช้เงื่อนไขนี้ก็ได้
+                        if buy(client, ask, required_usdt, 2) == 1:
                             return
                         else:
-                            show_error_text()
+                            # buy() ภายในจะจับ exception และคืน 0 มาแล้ว
+                            # ไม่ต้องแจ้งหน้า console ตามที่ต้องการ
+                            # ถ้าต้องการแจ้ง Telegram ว่าส่งคำสั่งไม่สำเร็จ สามารถใส่ได้ที่นี่
                             return
                     else:
-                        show_skip_text()
+                        # 6) เงินไม่พอ -> แจ้งเตือน Telegram แต่ไม่ขึ้นหน้า console
+                        global last_dca_insufficient_notify_ts
+                        symbol = config['COIN'].upper() + config['MARGIN'].upper()
+                        now_ts = time.time()
+                        if now_ts - last_dca_insufficient_notify_ts >= 3600:
+                            msg = (
+                                '⚠️ *ยอดเงินไม่พอสำหรับ DCA*'
+                                f'\n💱 เหรียญ : *{symbol}*'
+                                f'\n💵 ต้องใช้ : {number_truncate(required_usdt_with_fee, botSetup_precision_margin)} {config["MARGIN"].upper()}'
+                                f'\n💰 คงเหลือ : {number_truncate(balance_free, botSetup_precision_margin)} {config["MARGIN"].upper()}'
+                                f'\n⛔ งดส่งคำสั่งซื้อ DCA'
+                            )
+                            telegram_notify(False, msg, None, None, None, None, None, None)
+                            last_dca_insufficient_notify_ts = now_ts
                         return
             if db_ordercount == 1: # ถ้ามีแค่ 1 ออเดอร์
                 if bid > db_lastorder_price + db_pricerange: # sell profit

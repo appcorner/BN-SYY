@@ -39,9 +39,11 @@ class TelegramNotify:
             print(ex)
         return self.chat_id
 
-    def Send_Text(self, text):
+    def Send_Text(self, text, parse_mode=None):
         try:
             params = {'chat_id': self.chat_id, 'text': text}
+            if parse_mode is not None:
+                params['parse_mode'] = parse_mode
             session = requests.Session()
             session_post = session.post(self.url + self.send_message, params=params)
             # print(session_post.text)
@@ -70,9 +72,9 @@ class TelegramNotify:
         except Exception as ex:
             print(ex)
 
-    def send(self, text, image_path=None, show_caption_above_media=True, sticker_id=None, package_id=None):
+    def send(self, text, image_path=None, show_caption_above_media=True, sticker_id=None, package_id=None, parse_mode=None):
         if text:
-            self.Send_Text(text)
+            self.Send_Text(text, parse_mode=parse_mode)
         if image_path is not None:
             self.Send_Image('', image_path, show_caption_above_media)
         if sticker_id is not None:
