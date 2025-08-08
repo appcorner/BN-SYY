@@ -46,3 +46,4 @@
 ## หมายเหตุ
 - ผู้พัฒนาใช้ Python เวอร์ชั่น 3.12.10 พัฒนาบน Windows 11 นะครับ
 - ใช้ package python-binance 1.0.29
+- build package https://mega.nz/file/XAx3lSKT#RlVjCuWSoXOWxNXB9wtBwJGY3cgQz3pNNNRcL5kqw5A
