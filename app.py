@@ -1023,11 +1023,11 @@ if __name__ == '__main__':
                         continue
                     if api_tld == 'th':
                         if config['MARGIN'].upper() == 'THB':
-                            socket = 'wss://stream-th.2meta.app/stream?streams={}@bookTicker'.format(symbol.lower())
+                            socket = 'wss://stream-th.2meta.app/stream?streams={}@ticker'.format(symbol.lower())
                         else:
-                            socket = 'wss://www.binance.th/stream?streams={}@bookTicker'.format(symbol.lower())
+                            socket = 'wss://www.binance.th/stream?streams={}@ticker'.format(symbol.lower())
                     else:
-                        socket = 'wss://fstream.binance.com/stream?streams={}@bookTicker'.format(symbol.lower())
+                        socket = 'wss://fstream.binance.com/stream?streams={}@ticker'.format(symbol.lower())
                     connect = websocket.WebSocketApp(socket, on_message=on_message, on_close=on_close)
                     connect.run_forever()
                 else:
@@ -1053,3 +1053,4 @@ if __name__ == '__main__':
         logger.info('===== BN_SYY stop =====')
 
 #poetry run pyinstaller app.py --add-data "D:/pypoetry/Cache/virtualenvs/bn-syy-Efwh64a3-py3.12/Lib/site-packages/dateparser/data/dateparser_tz_cache.pkl;dateparser/data" --icon=ATK_new.ico --clean --collect-submodules application --onefile --name bn_syy
+#pyinstaller app.py --add-data "<python lib path>/site-packages/dateparser/data/dateparser_tz_cache.pkl;dateparser/data" --icon=ATK_new.ico --clean --collect-submodules application --onefile --name bn_syy
