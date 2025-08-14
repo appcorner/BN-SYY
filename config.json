@@ -10,8 +10,10 @@
     "COIN": "BTC",
     "MARGIN": "USDT",
     "ALL_IN": 0,
-    "ORDER_SIZE": 5.0,
-    "MAX_ORDER": 50,
+    "ORDER_SIZE": 5,
+    "MAX_ORDER": 100,
+    "BUY_ORDER_TYPE": "MARKET",
+    "SELL_ORDER_TYPE": "LIMIT",
     
     "STOPNEXTCIRCLE": 0
 }

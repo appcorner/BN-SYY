@@ -271,10 +271,15 @@ def buy(client, ask, ordersize, cmd): # cmd 1 -> buy first order, 2 -> buy DCA
         # lot_size = ordersize / ask
         # lot_size = round(lot_size, 0)
         # logger.debug('lot_size : ' + str(lot_size))
-        buy_order = client.order_limit_buy(
-            symbol=symbol.upper(),
-            quantity=f'{qty_size:.{lot_precision}f}',
-            price=f'{ask:.{botSetup_precision_coin}f}')
+        if 'BUY_ORDER_TYPE' in config.keys() and config['BUY_ORDER_TYPE'].upper() == 'MARKET':
+            buy_order = client.order_market_buy(
+                symbol=symbol.upper(),
+                quantity=f'{qty_size:.{lot_precision}f}')
+        else:
+            buy_order = client.order_limit_buy(
+                symbol=symbol.upper(),
+                quantity=f'{qty_size:.{lot_precision}f}',
+                price=f'{ask:.{botSetup_precision_coin}f}')
         temp_write(buy_order['clientOrderId'], cmd, buy_order)
         return 1
     except Exception as e:
@@ -291,10 +296,15 @@ def sell(client, bid, qty_size, cmd): # cmd 3 -> sell profit, 4 -> sell dca, 5 -
         # lot_size = ordersize / bid
         # lot_size = round(lot_size, 0)
         # logger.debug('lot_size : ' + str(lot_size))
-        sell_order = client.order_limit_sell(
-            symbol=symbol.upper(),
-            quantity=f'{qty_size:.{lot_precision}f}',
-            price=f'{bid:.{botSetup_precision_coin}f}')
+        if 'SELL_ORDER_TYPE' in config.keys() and config['SELL_ORDER_TYPE'].upper() == 'MARKET':
+            sell_order = client.order_market_sell(
+                symbol=symbol.upper(),
+                quantity=f'{qty_size:.{lot_precision}f}')
+        else:
+            sell_order = client.order_limit_sell(
+                symbol=symbol.upper(),
+                quantity=f'{qty_size:.{lot_precision}f}',
+                price=f'{bid:.{botSetup_precision_coin}f}')
         temp_write(sell_order['clientOrderId'], cmd, sell_order)
         return 1
     except Exception as e:
@@ -345,7 +355,7 @@ def on_message(connect, message):
         #     raise error_is
         
         # datetime สำหรับ loop บอท
-        datetime_now = datetime_now = datetime.now(timezone('Asia/Bangkok')).replace(tzinfo=None)
+        datetime_now = datetime.now(timezone('Asia/Bangkok')).replace(tzinfo=None)
         
         ###############################
         # *** ป้องกันการรันบอทซ้อนกัน *** #
@@ -1027,7 +1037,7 @@ if __name__ == '__main__':
                         else:
                             socket = 'wss://www.binance.th/stream?streams={}@ticker'.format(symbol.lower())
                     else:
-                        socket = 'wss://fstream.binance.com/stream?streams={}@ticker'.format(symbol.lower())
+                        socket = 'wss://stream.binance.com:9443/stream?streams={}@ticker'.format(symbol.lower())
                     connect = websocket.WebSocketApp(socket, on_message=on_message, on_close=on_close)
                     connect.run_forever()
                 else:
